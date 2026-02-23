@@ -1,0 +1,5 @@
+/target
+printlabel.db
+*.db
+.env
+
