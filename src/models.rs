@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
 pub struct PrintRequest {
@@ -8,7 +8,8 @@ pub struct PrintRequest {
     pub plan_qty: i32,
 }
 
-#[derive(Debug, Deserialize)]
+// เพิ่ม Serialize และ Clone เข้ามาตรงนี้
+#[derive(Debug, Deserialize, Serialize, Clone)] 
 pub struct LabelRequest {
     pub customer_code: String,
     pub brand: String,
@@ -17,4 +18,5 @@ pub struct LabelRequest {
     pub serial_no: String,
     pub barcode_main: String,
     pub barcode_sub: Option<String>,
+    pub plan_qty: i32, // เพิ่มจำนวนผลิตเข้ามาด้วย
 }

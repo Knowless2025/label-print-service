@@ -3,7 +3,7 @@ use axum::{
     extract::State,
     http::{StatusCode, header},
     Json,
-    response::{IntoResponse, Response},
+    response::{IntoResponse, Response, Html},
 };
 use reqwest::Client;
 use serde_json::json;
@@ -51,6 +51,13 @@ pub async fn print_label(
 
     match db.consume_next_running(&req.barcode) {
         Ok(running_no) => {
+            
+            // ----------------------------------------------------
+            // เพิ่มโค้ดส่วนนี้: เคลียร์ข้อมูลใน Memory ทิ้งหลังตัดยอดสำเร็จ!
+            let mut active = state.active_label.lock().unwrap();
+            *active = None; 
+            // ----------------------------------------------------
+
             Json(json!({
                 "status": "PRINT_ACCEPTED",
                 "barcode": req.barcode,
@@ -100,5 +107,41 @@ pub async fn preview_label_image(
     } else {
         let error_text = response.text().await.unwrap_or_default();
         (StatusCode::BAD_REQUEST, format!("Labelary Error: {}", error_text)).into_response()
+    }
+
+}
+pub async fn serve_ui() -> Html<&'static str> {
+    // คำสั่ง include_str! จะดึงไฟล์ index.html เข้ามาฝังในโปรแกรมตอน Compile
+    Html(include_str!("../index.html"))
+}
+// --------------------------------------------------------
+// ส่วนที่เพิ่มใหม่: ฟังก์ชันพักข้อมูลจากภายนอก
+// --------------------------------------------------------
+
+// รับข้อมูลจาก Hoppscotch มาพักไว้ใน Memory
+pub async fn stage_label(
+    State(state): State<AppState>,
+    Json(req): Json<LabelRequest>,
+) -> Response {
+    let mut active = state.active_label.lock().unwrap();
+    *active = Some(req); // เอาข้อมูลใหม่ใส่เข้าไป
+    
+    (StatusCode::OK, Json(json!({
+        "status": "DATA_RECEIVED",
+        "message": "ส่งข้อมูลสำเร็จ! รอพนักงานกดยืนยันที่หน้าจอ"
+    }))).into_response()
+}
+
+// หน้าเว็บวิ่งมาเช็คว่ามีข้อมูลส่งมาหรือยัง
+pub async fn get_staged_label(
+    State(state): State<AppState>,
+) -> Response {
+    let active = state.active_label.lock().unwrap();
+    match &*active {
+        Some(label) => (StatusCode::OK, Json(label.clone())).into_response(),
+        None => (
+            StatusCode::NOT_FOUND,
+            Json(json!({"error": "ยังไม่มีข้อมูลส่งเข้ามาจากระบบ"})),
+        ).into_response(),
     }
 }

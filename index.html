@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ระบบพิมพ์สติ๊กเกอร์ - AEROKLAS</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f4f7f6; color: #333; text-align: center; padding: 20px; }
+        .container { max-width: 600px; margin: 0 auto; background: white; padding: 30px; border-radius: 10px; box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .preview-box { border: 2px dashed #008CBA; padding: 10px; margin: 20px auto; min-height: 250px; display: flex; align-items: center; justify-content: center; background-color: #fafafa; }
+        button { padding: 15px 20px; font-size: 16px; font-weight: bold; border-radius: 5px; cursor: pointer; margin: 5px; border: none; transition: 0.3s; }
+        .btn-preview { background-color: #008CBA; color: white; }
+        .btn-preview:hover { background-color: #007399; }
+        .btn-print { background-color: #4CAF50; color: white; display: none; }
+        .btn-office { background-color: #f39c12; color: white; display: none; }
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <h2>🏷️ ระบบตรวจสอบและพิมพ์ฉลาก</h2>
+        <p id="planInfo" style="color: #666;">รอรับข้อมูลจากระบบ...</p>
+        
+        <div class="preview-box">
+            <span id="placeholderText" style="color: #999;">คลิก "ดูตัวอย่างฉลาก" เพื่อเช็คข้อมูลล่าสุด</span>
+            <img id="labelImage" src="" alt="Label Preview" style="max-width: 100%; display: none; border: 1px solid #ccc;">
+        </div>
+
+        <button class="btn-preview" onclick="loadPreview()">🔍 1. ดูตัวอย่างฉลาก</button>
+        <button id="officeBtn" class="btn-office" onclick="printToOffice()">🖨️ ทดสอบปริ้นท์ (เครื่องออฟฟิศ)</button>
+        <button id="printBtn" class="btn-print" onclick="confirmPrint()">✅ 2. ยืนยันการพิมพ์ (ตัดยอด)</button>
+    </div>
+
+    <script>
+        let currentLabelData = null; // เก็บข้อมูลที่ได้จากหลังบ้าน
+
+        async function loadPreview() {
+            try {
+                // 1. ไปถามหลังบ้านก่อนว่ามีข้อมูลถูกส่งมาจาก Hoppscotch ไหม?
+                const checkRes = await fetch('/api/current');
+                
+                if (!checkRes.ok) {
+                    alert("⚠️ ระบบยังไม่มีคิวงานครับ!\nกรุณายิงข้อมูลจาก Hoppscotch เข้ามาก่อน");
+                    return;
+                }
+
+                // 2. ถ้ามีข้อมูล ให้เก็บไว้และเอาไปดึงรูป
+                currentLabelData = await checkRes.json();
+                
+                document.getElementById('planInfo').innerText = `ข้อมูลแผน: Part No. ${currentLabelData.part_no} (${currentLabelData.side}) | จำนวนแพลน: ${currentLabelData.plan_qty}`;
+                document.getElementById('placeholderText').innerText = "กำลังสร้างรูปภาพฉลาก...";
+
+                const response = await fetch('/print/preview-image', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(currentLabelData)
+                });
+
+                if (response.ok) {
+                    const imageBlob = await response.blob();
+                    const imageUrl = URL.createObjectURL(imageBlob);
+                    
+                    document.getElementById('placeholderText').style.display = 'none';
+                    const imgElement = document.getElementById('labelImage');
+                    imgElement.src = imageUrl;
+                    imgElement.style.display = 'block';
+
+                    document.getElementById('printBtn').style.display = 'inline-block';
+                    document.getElementById('officeBtn').style.display = 'inline-block';
+                }
+            } catch (error) {
+                console.error("Error:", error);
+                alert("เชื่อมต่อ Server ไม่ได้");
+            }
+        }
+
+        function printToOffice() {
+            const imgSrc = document.getElementById('labelImage').src;
+            if (!imgSrc) return;
+            const printWindow = window.open('', '_blank');
+            printWindow.document.write(`
+                <html>
+                    <body style="margin: 0; padding: 20px; display: flex; justify-content: center;">
+                        <img src="${imgSrc}" style="width: 2in; height: 1.5in; border: 1px dashed #ccc;" />
+                        <script>window.onload = function() { setTimeout(() => { window.print(); window.close(); }, 500); };<\/script>
+                    </body>
+                </html>
+            `);
+            printWindow.document.close();
+        }
+
+        async function confirmPrint() {
+            if (!currentLabelData) return;
+
+            try {
+                const printData = {
+                    "barcode": currentLabelData.barcode_main,
+                    "part_no": currentLabelData.part_no,
+                    "side": currentLabelData.side,
+                    "plan_qty": currentLabelData.plan_qty
+                };
+
+                const response = await fetch('/print/label', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(printData)
+                });
+
+                const result = await response.json();
+
+                if (response.ok) {
+                    alert(`✅ สั่งพิมพ์และตัดยอดสำเร็จ!\nชิ้นที่: ${result.running_no}\nบาร์โค้ด: ${result.barcode}`);
+                    document.getElementById('printBtn').style.display = 'none';
+                    document.getElementById('officeBtn').style.display = 'none';
+                    document.getElementById('labelImage').style.display = 'none';
+                    
+                    document.getElementById('placeholderText').style.display = 'block';
+                    document.getElementById('placeholderText').innerText = "รอรับข้อมูลชิ้นงานถัดไป...";
+                    document.getElementById('planInfo').innerText = "รอรับข้อมูลจากระบบ...";
+                    
+                    currentLabelData = null; // ล้างข้อมูลทิ้งหลังปริ้นท์เสร็จ
+                } else {
+                    alert(`❌ พิมพ์ไม่สำเร็จ: ${result.error}`);
+                }
+            } catch (error) {
+                console.error("Error:", error);
+            }
+        }
+    </script>
+</body>
+</html>
