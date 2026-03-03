@@ -1,4 +1,4 @@
-use crate::LabelRequest;
+use crate::models::LabelRequest;
 
 pub fn generate_zpl(label: &LabelRequest) -> String {
     let customer = &label.customer_code;
@@ -13,24 +13,27 @@ pub fn generate_zpl(label: &LabelRequest) -> String {
 r#"^XA
 ^CI28
 ^PW400
-^LL300
+^LL260
 
-^CF0,30
+^CF0,24
 ^FO20,20^FD{customer}^FS
-
-^CF0,28
-^FO20,60^FD{brand}^FS
-^FO300,60^FD{side}^FS
+^CF0,32
+^FO330,15^FD{side}^FS
 
 ^CF0,26
-^FO20,100^FD{part_no} {serial}^FS
+^FO20,55^FD{brand}^FS
 
-^BY2,2,60
-^FO20,140^BCN,60,Y,N,N
+^CF0,24
+^FO20,90^FD{part_no}^FS
+^CF0,26
+^FO330,90^FD{serial}^FS
+
+^BY2,2,40
+^FO20,135^BCN,40,N,N,N
 ^FD{barcode}^FS
 
-^CF0,22
-^FO20,220^FD{barcode} [{barcode_sub}]^FS
+^CF0,20
+^FO20,185^FD{barcode} [ {barcode_sub} ]^FS
 
 ^XZ"#
     )
