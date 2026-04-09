@@ -2,4 +2,6 @@
 printlabel.db
 *.db
 .env
-
+*.db-shm
+*.db-wal
+ 
